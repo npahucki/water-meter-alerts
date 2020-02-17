@@ -1,0 +1,13 @@
+{
+  "extends": "airbnb-base",
+	"parserOptions": {
+	    "sourceType": "script"
+	  },
+	"env": {
+    "node": true
+  },
+  "rules": {
+  },
+  "globals": {
+  }
+}
