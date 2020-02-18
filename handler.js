@@ -14,14 +14,17 @@ function getEnv(key, defaultValue) {
   return value;
 }
 
-async function sendAlert(litresConsumed, startDate, alert, testMode) {
+async function sendAlert(litresConsumedForDay, litresConsumedForMonth, startDate, testMode) {
+  const maxLitresPerMonth = parseInt(getEnv('MONTHLY_LITRE_LIMIT', '25000'), 10);
+  const monthlyTriggerValue = maxLitresPerMonth * 0.85;
+
   const sns = new AWS.SNS();
   const TopicArn = getEnv('ALERT_TOPIC_ARN');
   // eslint-disable-next-line no-template-curly-in-string
   const reportUrl = getEnv('KIBANA_MONTHLY_REPORT_URL').replace('{startDate}', startDate.toISOString());
-  const Message = alert
-    ? `ALERTA: Se ha excedido el limite para el mes con ${litresConsumed}L. \nVer:${reportUrl}`
-    : `AVISO: Se ha consumido ${litresConsumed}L del mes. \nVer:${reportUrl}`;
+  const Message = litresConsumedForMonth > monthlyTriggerValue
+    ? `ALERTA: Se ha excedido el 85% del limite del mes con ${litresConsumedForMonth}L. \nVer:${reportUrl}`
+    : `AVISO: Se ha consumido ${litresConsumedForDay}L hoy dia y ${litresConsumedForMonth}L del mes. \nVer:${reportUrl}`;
 
   if (testMode) {
     // eslint-disable-next-line no-console
@@ -32,36 +35,24 @@ async function sendAlert(litresConsumed, startDate, alert, testMode) {
   return sns.publish({ Message, TopicArn }).promise();
 }
 
-module.exports.run = async (event) => {
-  const host = getEnv('ES_ENDPOINT');
-  const billingDay = parseInt(getEnv('BILLING_DAY', '26'), 10);
-  const maxLitresPerMonth = parseInt(getEnv('MONTHLY_LITRE_LIMIT', '25000'), 10);
+function getTz() {
+  return getEnv('TIMEZONE', 'America/Santiago');
+}
 
-  const client = new elasticsearch.Client({
-    host,
-    connectionClass: httpAwsEs,
-    amazonES: {
-      region: 'us-east-1',
-      credentials: new AWS.EnvironmentCredentials('AWS'),
-    },
-  });
-
-  const now = moment().tz('America/Santiago');
-  const startDate = now.subtract(now.date() > billingDay ? 0 : 1, 'month')
-    .date(billingDay).startOf('day');
-
-  const body = await client.search({
+async function getLitresConsumed(client, from) {
+  const query = {
     index: 'water-meter-reading',
     body: {
       size: 0,
       query: {
         range: {
           ts: {
-            from: startDate.toISOString(),
+            from,
             to: 'now',
             include_lower: true,
             include_upper: true,
             boost: 1,
+            time_zone: getTz(),
           },
         },
       },
@@ -77,14 +68,40 @@ module.exports.run = async (event) => {
         },
       },
     },
+  };
+
+  const result = await client.search(query);
+  return result.aggregations.litres.value.toFixed(1);
+}
+
+
+module.exports.run = async (event) => {
+  const host = getEnv('ES_ENDPOINT');
+  const billingDay = parseInt(getEnv('BILLING_DAY', '26'), 10);
+
+  const client = new elasticsearch.Client({
+    host,
+    connectionClass: httpAwsEs,
+    amazonES: {
+      region: 'us-east-1',
+      credentials: new AWS.EnvironmentCredentials('AWS'),
+    },
   });
 
-  const litresConsumed = body.aggregations.litres.value.toFixed(1);
-  const alarm = litresConsumed > maxLitresPerMonth;
-  await sendAlert(litresConsumed, startDate, alarm, event.testMode);
+  const now = moment().tz(getTz());
+  const startDate = now.subtract(now.date() > billingDay ? 0 : 1, 'month')
+    .date(billingDay).startOf('day');
+
+  const litresConsumedForMonth = await getLitresConsumed(client, startDate);
+  const litresConsumedForDay = await getLitresConsumed(client,'now/d');
+  await sendAlert(litresConsumedForDay, litresConsumedForMonth, startDate, event.testMode);
 
   return {
     statusCode: 200,
-    body: JSON.stringify({ litresConsumed, startDate: startDate.toISOString(), alarm }),
+    body: JSON.stringify({
+      litresConsumedForDay,
+      litresConsumedForMonth,
+      startDate: startDate.toISOString()
+    }),
   };
 };

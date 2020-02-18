@@ -49,6 +49,8 @@ functions:
 
 #    Define function environment variables here
     environment:
+      BILLING_DAY: 26
+      MONTHLY_LITRE_LIMIT: 25000
       ALERT_TOPIC_ARN: arn:aws:sns:us-east-1:570680843415:water-meter-anomalies
       ES_ENDPOINT: https://search-watermeter-d5svnxmh4jfi557hwhb3t2v3eu.us-east-1.es.amazonaws.com
       KIBANA_MONTHLY_REPORT_URL: https://search-watermeter-d5svnxmh4jfi557hwhb3t2v3eu.us-east-1.es.amazonaws.com/_plugin/kibana/app/kibana#/dashboard/1c6c6880-487d-11ea-971e-7990dcf98c88?_g=(time:(from:'{startDate}',to:now))&_a=(timeRestore:!t)
