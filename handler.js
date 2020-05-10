@@ -23,8 +23,8 @@ async function sendAlert(litresConsumedForDay, litresConsumedForMonth, startDate
   // eslint-disable-next-line no-template-curly-in-string
   const reportUrl = getEnv('KIBANA_MONTHLY_REPORT_URL').replace('{startDate}', startDate.toISOString());
   const Message = litresConsumedForMonth > monthlyTriggerValue
-    ? `ALERTA: Se ha excedido el 85% del limite del mes con ${litresConsumedForMonth}L. \nVer:${reportUrl}`
-    : `AVISO: Se ha consumido ${litresConsumedForDay}L hoy dia y ${litresConsumedForMonth}L del mes. \nVer:${reportUrl}`;
+    ? `ALERTA: Excedidó 85% del limite del mes con ${litresConsumedForMonth}L ${litresConsumedForDay}L en el ultimo 24 horas. \nVer:${reportUrl}`
+    : `AVISO: Se ha consumido ${litresConsumedForDay}L durante el ultimo 24 horas y ${litresConsumedForMonth}L del mes. \nVer:${reportUrl}`;
 
   if (testMode) {
     // eslint-disable-next-line no-console
@@ -74,7 +74,6 @@ async function getLitresConsumed(client, from) {
   return result.aggregations.litres.value.toFixed(1);
 }
 
-
 module.exports.run = async (event) => {
   const host = getEnv('ES_ENDPOINT');
   const billingDay = parseInt(getEnv('BILLING_DAY', '26'), 10);
@@ -93,7 +92,7 @@ module.exports.run = async (event) => {
     .date(billingDay).startOf('day');
 
   const litresConsumedForMonth = await getLitresConsumed(client, startDate);
-  const litresConsumedForDay = await getLitresConsumed(client,'now/d');
+  const litresConsumedForDay = await getLitresConsumed(client,'now-24h');
   await sendAlert(litresConsumedForDay, litresConsumedForMonth, startDate, event.testMode);
 
   return {
@@ -101,7 +100,7 @@ module.exports.run = async (event) => {
     body: JSON.stringify({
       litresConsumedForDay,
       litresConsumedForMonth,
-      startDate: startDate.toISOString()
+      startDate: startDate.toISOString(),
     }),
   };
 };
