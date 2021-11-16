@@ -11,7 +11,7 @@
     "eslint-plugin-import": "2.20.1"
   },
   "dependencies": {
-    "aws-sdk": "2.619.0",
+    "aws-sdk": "2.814.0",
     "elasticsearch": "16.6.0",
     "http-aws-es": "6.0.0",
     "moment": "2.24.0",
